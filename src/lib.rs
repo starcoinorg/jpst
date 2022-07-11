@@ -1,7 +1,7 @@
 use jsonpath::Selector;
 use multimap::MultiMap;
 use regex::Regex;
-use serde_json::{Map, Value};
+use serde_json::{json, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 struct Match {
@@ -117,6 +117,31 @@ fn test_multi() {
     let mut ctx = Context::new();
     ctx.insert("name", "alice");
     ctx.insert("name", "bob");
+    let tpl = RegexTemplateEngine::parse(tpl);
+    let result = RegexTemplateEngine::render(&ctx, &tpl);
+    assert_eq!("Hello, bob!".to_owned(), result);
+}
+
+#[test]
+fn test_embed_obj() {
+    let tpl = "Hello, {{$.friends[1].name}}!";
+    let mut ctx = Context::new();
+    ctx.insert(
+        "friends",
+        json!({
+                "name": "alice",
+                "age": 18,
+            }
+        ),
+    );
+    ctx.insert(
+        "friends",
+        json!({
+                "name": "bob",
+                "age": 20,
+            }
+        ),
+    );
     let tpl = RegexTemplateEngine::parse(tpl);
     let result = RegexTemplateEngine::render(&ctx, &tpl);
     assert_eq!("Hello, bob!".to_owned(), result);

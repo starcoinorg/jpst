@@ -23,4 +23,30 @@ fn test_multi() {
     let result = RegexTemplateEngine::render(&ctx, &tpl);
     assert_eq!("Hello, bob!".to_owned(), result);
 }
+
+#[test]
+fn test_embed_obj() {
+    let tpl = "Hello, {{$.friends[1].name}}!";
+    let mut ctx = Context::new();
+    ctx.insert(
+        "friends",
+        json!({
+                "name": "alice",
+                "age": 18,
+            }
+        ),
+    );
+    ctx.insert(
+        "friends",
+        json!({
+                "name": "bob",
+                "age": 20,
+            }
+        ),
+    );
+    let tpl = RegexTemplateEngine::parse(tpl);
+    let result = RegexTemplateEngine::render(&ctx, &tpl);
+    assert_eq!("Hello, bob!".to_owned(), result);
+}
+
 ```
