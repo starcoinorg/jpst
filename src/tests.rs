@@ -1,4 +1,5 @@
 use super::*;
+use serde::{Deserialize, Serialize};
 
 #[test]
 fn tests() {
@@ -47,4 +48,25 @@ fn test_case(ctx: &Context, case: Case) {
     let tpl = RegexTemplateEngine::parse(case.tpl);
     let result = RegexTemplateEngine::render(ctx, &tpl);
     assert_eq!(case.expect.to_owned(), result, "tpl: {}", case.tpl);
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Person {
+    pub name: String,
+    pub age: u8,
+}
+#[test]
+fn test_format_str() {
+    let person = Person {
+        name: "alice".to_string(),
+        age: 18,
+    };
+    let result = format_str!("name:{{$.name}},age:{{$.age}}", &person);
+    assert_eq!("name:alice,age:18".to_string(), result);
+
+    let result = format_str!("{{$.value}}", "alice");
+    assert_eq!("alice".to_string(), result);
+
+    let result = format_str!("{{$.value}}", 1);
+    assert_eq!("1".to_string(), result);
 }

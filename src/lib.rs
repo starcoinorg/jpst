@@ -1,6 +1,7 @@
 use jsonpath_plus::JsonPath;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde::Serialize;
 use serde_json::{json, map::Entry, Map, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,7 +98,7 @@ impl<'a> ContextEntry<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Context {
-    value: Map<String, Value>,
+    root: Map<String, Value>,
 }
 
 impl Default for Context {
@@ -108,7 +109,23 @@ impl Default for Context {
 
 impl Context {
     pub fn new() -> Self {
-        Context { value: Map::new() }
+        Context { root: Map::new() }
+    }
+
+    pub fn new_with_root<V>(root_value: V) -> Self
+    where
+        V: Serialize,
+    {
+        let value: Value = json!(root_value);
+        let root = match value {
+            Value::Object(m) => m,
+            _ => {
+                let mut m = Map::new();
+                m.insert("value".to_string(), value);
+                m
+            }
+        };
+        Context { root }
     }
 
     pub fn entry<S>(&mut self, key: S) -> ContextEntry
@@ -116,12 +133,12 @@ impl Context {
         S: Into<String>,
     {
         ContextEntry {
-            entry: self.value.entry(key),
+            entry: self.root.entry(key),
         }
     }
 
     pub fn as_value(&self) -> Value {
-        Value::Object(self.value.clone())
+        Value::Object(self.root.clone())
     }
 }
 
@@ -149,6 +166,16 @@ impl TemplateEngine for RegexTemplateEngine {
                 .collect(),
         )
     }
+}
+
+#[macro_export]
+macro_rules! format_str {
+    ($fmt:expr, $val:expr) => {{
+        let ctx = $crate::Context::new_with_root($val);
+        let tpl = $crate::RegexTemplateEngine::parse($fmt);
+        let s = $crate::RegexTemplateEngine::render(&ctx, &tpl);
+        s
+    }};
 }
 
 #[cfg(test)]
