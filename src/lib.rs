@@ -1,3 +1,6 @@
+// Copyright (c) The Starcoin Core Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use jsonpath_plus::JsonPath;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -62,14 +65,15 @@ pub struct ContextEntry<'a> {
 impl<'a> ContextEntry<'a> {
     pub fn set<V>(self, value: V)
     where
-        V: Into<Value>,
+        V: Serialize,
     {
+        let json_value = serde_json::to_value(value).expect("must be json value");
         match self.entry {
             Entry::Occupied(mut o) => {
-                o.insert(value.into());
+                o.insert(json_value);
             }
             Entry::Vacant(v) => {
-                v.insert(value.into());
+                v.insert(json_value);
             }
         }
     }
@@ -116,7 +120,7 @@ impl Context {
     where
         V: Serialize,
     {
-        let value: Value = json!(root_value);
+        let value: Value = serde_json::to_value(root_value).expect("must be json value");
         let root = match value {
             Value::Object(m) => m,
             _ => {
@@ -125,6 +129,7 @@ impl Context {
                 m
             }
         };
+
         Context { root }
     }
 
@@ -139,6 +144,21 @@ impl Context {
 
     pub fn as_value(&self) -> Value {
         Value::Object(self.root.clone())
+    }
+}
+
+impl<T> From<T> for Context
+where
+    T: Serialize,
+{
+    fn from(t: T) -> Self {
+        Self::new_with_root(t)
+    }
+}
+
+impl From<&Context> for Context {
+    fn from(c: &Context) -> Self {
+        c.clone()
     }
 }
 
@@ -171,7 +191,7 @@ impl TemplateEngine for RegexTemplateEngine {
 #[macro_export]
 macro_rules! format_str {
     ($fmt:expr, $val:expr) => {{
-        let ctx = $crate::Context::new_with_root($val);
+        let ctx = $val.into();
         let tpl = $crate::RegexTemplateEngine::parse($fmt);
         let s = $crate::RegexTemplateEngine::render(&ctx, &tpl);
         s

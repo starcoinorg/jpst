@@ -1,3 +1,6 @@
+// Copyright (c) The Starcoin Core Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use serde::{Deserialize, Serialize};
 
@@ -69,4 +72,50 @@ fn test_format_str() {
 
     let result = format_str!("{{$.value}}", 1);
     assert_eq!("1".to_string(), result);
+
+    let mut ctx = Context::new();
+    ctx.entry("name").set("alice");
+    ctx.entry("age").set(18);
+    let result = format_str!("name:{{$.name}},age:{{$.age}}", &ctx);
+    assert_eq!("name:alice,age:18".to_string(), result);
+}
+
+#[test]
+fn readme_example() {
+    let json_value = json!({
+        "my": {
+            "name": "alice",
+            "age": 18,
+        },
+        "friends": [
+            {
+                "name": "bob",
+                "age": 18,
+            },
+            {
+                "name": "tom",
+                "age": 20,
+            },
+        ],
+    });
+
+    assert_eq!(
+        "Hello, alice!".to_string(),
+        format_str!("Hello, {{$.my.name}}!", &json_value)
+    );
+
+    assert_eq!(
+        "Hello, bob!".to_string(),
+        format_str!("Hello, {{$.friends[0].name}}!", &json_value)
+    );
+
+    assert_eq!(
+        "Hello, tom!".to_string(),
+        format_str!("Hello, {{$.friends[-1].name}}!", &json_value)
+    );
+
+    assert_eq!(
+        "Hello, tom!".to_string(),
+        format_str!("Hello, {{$.friends[?(@.age > 18)].name}}!", &json_value)
+    );
 }
