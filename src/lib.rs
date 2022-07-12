@@ -1,7 +1,7 @@
-use jsonpath::Selector;
-use multimap::MultiMap;
+use jsonpath_plus::JsonPath;
+use once_cell::sync::Lazy;
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{json, map::Entry, Map, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 struct Match {
@@ -27,59 +27,120 @@ impl Template {
 
 pub trait TemplateEngine {
     fn parse(tpl: &str) -> Template;
-    fn render(ctx: &Context, tpl: &Template) -> String;
+    fn render(ctx: &Context, tpl: &Template) -> String {
+        let mut src = tpl.src.clone();
+        let root = ctx.as_value();
+        for m in &tpl.matches {
+            let path = match JsonPath::compile(m.name.as_str()) {
+                Ok(path) => path,
+                Err(e) => {
+                    eprintln!("Parse Error: {:?}", e);
+                    continue;
+                }
+            };
+
+            let value = path.find(&root).pop().cloned().unwrap_or_else(|| json!(""));
+            let value = value_to_str(&value);
+            src = src.replace(&tpl.src[m.start..m.end], value.as_str());
+        }
+        src
+    }
 }
 
+fn value_to_str(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        _ => v.to_string(),
+    }
+}
+
+pub struct ContextEntry<'a> {
+    entry: Entry<'a>,
+}
+
+impl<'a> ContextEntry<'a> {
+    pub fn set<V>(self, value: V)
+    where
+        V: Into<Value>,
+    {
+        match self.entry {
+            Entry::Occupied(mut o) => {
+                o.insert(value.into());
+            }
+            Entry::Vacant(v) => {
+                v.insert(value.into());
+            }
+        }
+    }
+
+    pub fn append<V>(self, value: V)
+    where
+        V: Into<Value>,
+    {
+        match self.entry {
+            Entry::Occupied(mut o) => {
+                if o.get().is_array() {
+                    o.get_mut()
+                        .as_array_mut()
+                        .expect("must be json array")
+                        .push(value.into());
+                } else {
+                    o.insert(json!([o.get().clone(), value.into()]));
+                }
+            }
+            Entry::Vacant(v) => {
+                v.insert(json!([value.into()]));
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Context {
-    value: MultiMap<String, Value>,
+    value: Map<String, Value>,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Context {
     pub fn new() -> Self {
-        Context {
-            value: MultiMap::new(),
-        }
-    }
-    pub fn insert<T: Into<Value>>(&mut self, key: &str, value: T) {
-        self.value.insert(key.to_string(), value.into());
+        Context { value: Map::new() }
     }
 
-    pub fn to_value(&self) -> Value {
-        let mut root = Value::Object(serde_json::Map::new());
-        for (key, values) in self.value.iter_all() {
-            if values.len() == 1 {
-                root.as_object_mut()
-                    .unwrap()
-                    .insert(key.to_string(), values[0].clone());
-            } else {
-                let mut array = Value::Array(Vec::new());
-                for value in values {
-                    array.as_array_mut().unwrap().push(value.clone());
-                }
-                root.as_object_mut().unwrap().insert(key.to_string(), array);
-            }
+    pub fn entry<S>(&mut self, key: S) -> ContextEntry
+    where
+        S: Into<String>,
+    {
+        ContextEntry {
+            entry: self.value.entry(key),
         }
-        root
+    }
+
+    pub fn as_value(&self) -> Value {
+        Value::Object(self.value.clone())
     }
 }
+
+static G_EXPR_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\{\{(.*?)\}\}").expect("build expr regex should success."));
 
 pub struct RegexTemplateEngine {}
 
 impl TemplateEngine for RegexTemplateEngine {
     fn parse(tpl: &str) -> Template {
-        let regex = Regex::new(r"\{\{([^}]*)\}\}").unwrap();
-
         Template::new(
             tpl,
-            regex
+            G_EXPR_REGEX
                 .find_iter(tpl)
                 .map(|m| Match {
                     name: m
                         .as_str()
-                        .strip_prefix("{{")
-                        .unwrap()
-                        .strip_suffix("}}")
-                        .unwrap()
+                        .trim_start_matches('{')
+                        .trim_end_matches('}')
                         .trim()
                         .to_string(),
                     start: m.start(),
@@ -88,61 +149,7 @@ impl TemplateEngine for RegexTemplateEngine {
                 .collect(),
         )
     }
-    fn render(ctx: &Context, tpl: &Template) -> String {
-        let mut src = tpl.src.clone();
-        for m in &tpl.matches {
-            let root = ctx.to_value();
-
-            let selector = Selector::new(m.name.as_str()).unwrap();
-            let value = selector.find(&root).next().unwrap().as_str().unwrap();
-            src = src.replace(&tpl.src[m.start..m.end], value);
-        }
-        src
-    }
 }
 
-#[test]
-fn test_single() {
-    let tpl = "Hello, {{$.name}}!";
-    let mut ctx = Context::new();
-    ctx.insert("name", "alice");
-    let tpl = RegexTemplateEngine::parse(tpl);
-    let result = RegexTemplateEngine::render(&ctx, &tpl);
-    assert_eq!("Hello, alice!".to_owned(), result);
-}
-
-#[test]
-fn test_multi() {
-    let tpl = "Hello, {{$.name[1]}}!";
-    let mut ctx = Context::new();
-    ctx.insert("name", "alice");
-    ctx.insert("name", "bob");
-    let tpl = RegexTemplateEngine::parse(tpl);
-    let result = RegexTemplateEngine::render(&ctx, &tpl);
-    assert_eq!("Hello, bob!".to_owned(), result);
-}
-
-#[test]
-fn test_embed_obj() {
-    let tpl = "Hello, {{$.friends[1].name}}!";
-    let mut ctx = Context::new();
-    ctx.insert(
-        "friends",
-        json!({
-                "name": "alice",
-                "age": 18,
-            }
-        ),
-    );
-    ctx.insert(
-        "friends",
-        json!({
-                "name": "bob",
-                "age": 20,
-            }
-        ),
-    );
-    let tpl = RegexTemplateEngine::parse(tpl);
-    let result = RegexTemplateEngine::render(&ctx, &tpl);
-    assert_eq!("Hello, bob!".to_owned(), result);
-}
+#[cfg(test)]
+mod tests;
