@@ -191,6 +191,7 @@ impl TemplateEngine for RegexTemplateEngine {
 #[macro_export]
 macro_rules! format_str {
     ($fmt:expr, $val:expr) => {{
+        use $crate::TemplateEngine;
         let ctx = $val.into();
         let tpl = $crate::RegexTemplateEngine::parse($fmt);
         let s = $crate::RegexTemplateEngine::render(&ctx, &tpl);
