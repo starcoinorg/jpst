@@ -31,7 +31,7 @@ impl Template {
 
 pub trait TemplateEngine {
     fn parse(tpl: &str) -> Template;
-    fn render(ctx: &Context, tpl: &Template) -> String {
+    fn render(ctx: &TemplateContext, tpl: &Template) -> String {
         let mut src = tpl.src.clone();
         let root = ctx.as_value();
         for m in &tpl.matches {
@@ -101,19 +101,19 @@ impl<'a> ContextEntry<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Context {
+pub struct TemplateContext {
     root: Map<String, Value>,
 }
 
-impl Default for Context {
+impl Default for TemplateContext {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Context {
+impl TemplateContext {
     pub fn new() -> Self {
-        Context { root: Map::new() }
+        TemplateContext { root: Map::new() }
     }
 
     pub fn new_with_root<V>(root_value: V) -> Self
@@ -130,7 +130,7 @@ impl Context {
             }
         };
 
-        Context { root }
+        TemplateContext { root }
     }
 
     pub fn entry<S>(&mut self, key: S) -> ContextEntry
@@ -147,7 +147,7 @@ impl Context {
     }
 }
 
-impl<T> From<T> for Context
+impl<T> From<T> for TemplateContext
 where
     T: Serialize,
 {
@@ -156,8 +156,8 @@ where
     }
 }
 
-impl From<&Context> for Context {
-    fn from(c: &Context) -> Self {
+impl From<&TemplateContext> for TemplateContext {
+    fn from(c: &TemplateContext) -> Self {
         c.clone()
     }
 }

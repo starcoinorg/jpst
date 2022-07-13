@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[test]
 fn tests() {
-    let mut ctx = Context::new();
+    let mut ctx = TemplateContext::new();
     ctx.entry("my").set(json!({"name": "alice"}));
     ctx.entry("friends").append(json!({
             "name": "bob",
@@ -47,7 +47,7 @@ fn case(tpl: &'static str, expect: &'static str) -> Case {
     Case { tpl, expect }
 }
 
-fn test_case(ctx: &Context, case: Case) {
+fn test_case(ctx: &TemplateContext, case: Case) {
     let tpl = RegexTemplateEngine::parse(case.tpl);
     let result = RegexTemplateEngine::render(ctx, &tpl);
     assert_eq!(case.expect.to_owned(), result, "tpl: {}", case.tpl);
@@ -73,7 +73,7 @@ fn test_format_str() {
     let result = format_str!("{{$.value}}", 1);
     assert_eq!("1".to_string(), result);
 
-    let mut ctx = Context::new();
+    let mut ctx = TemplateContext::new();
     ctx.entry("name").set("alice");
     ctx.entry("age").set(18);
     let result = format_str!("name:{{$.name}},age:{{$.age}}", &ctx);
