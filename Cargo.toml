@@ -1,6 +1,6 @@
 [package]
 authors = ["Jolestar <jolestar@gmail.com>", "Starcoin Core Dev <dev@starcoin.org>"]
-description = "a simple string template engine which support JSON Path"
+description = "a simple string template engine that supports JSON Path"
 edition = "2021"
 license-file = "LICENSE"
 name = "jpst"
