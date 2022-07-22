@@ -1,6 +1,6 @@
 # JPST
 
-JSON Path String Template
+A simple string template engine that supports JSON Path
 
 ```rust
 
