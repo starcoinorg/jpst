@@ -21,10 +21,10 @@ pub struct Template {
 }
 
 impl Template {
-    pub(crate) fn new(template: &str, matchs: Vec<Match>) -> Self {
+    pub(crate) fn new(template: &str, matches: Vec<Match>) -> Self {
         Template {
             src: template.to_string(),
-            matches: matchs,
+            matches,
         }
     }
 }
